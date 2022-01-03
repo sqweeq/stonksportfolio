@@ -7,11 +7,10 @@ import dns
 import certifi
 from bson.objectid import ObjectId
 import os
-from dotenv import load_dotenv
 import requests
+from dotenv import load_dotenv
 
 load_dotenv()
-
 mongo_URL = os.getenv('mongo_URL')
 api_key = os.getenv('IEX_KEY')
 
