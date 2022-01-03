@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link
+      rel="stylesheet"
+      href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css"
+    />
+    <script src="https://code.jquery.com/jquery-1.12.4.js"></script>
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+       <script
+      type="text/javascript"
+      src="https://canvasjs.com/assets/script/canvasjs.min.js"
+    ></script>
+    <title>Document</title>
+  </head>
+  <body>
+    <h1>Stonks portfolio</h1>
+        <div>
+      <table
+        id="stockTable"
+        border="1"
+        style="border-collapse: collapse; padding: 35px"
+      ></table>
+    </div>
+
+    <p id="mylog" />
+    <div style="padding: 35px">
+      <label for="tags">Stock symbol: </label>
+      <input id="symboltag" placeholder="Search" type="text" />
+      <label for="tags2">Quantity: </label>
+      <input id="quantitytag" placeholder="How many" type="text" />
+      <label for="tags3">Price: </label>
+      <input
+        id="pricetag"
+        placeholder="Price per share in USD"
+        type="text"
+        value=""
+        readonly
+      />
+      <br></br>
+      <button type="button" onclick="addToPortfolio()">UPDATE</button>
+      <button type="button" onclick="resetFields()">RESET</button>
+    </div>
+        <div id="myChart" style="height: 300px; width: 100%"></div>
+
+    <script>
+      var stockSymbols = [];
+      let portfolio = []
+      var stockAllData = null
+      var currentStock = null
+      var currentStockHistoric = null
+      var latestPrices = []
+      //get symbols
+      function getSymbols() {
+        fetch("/symbols")
+          .then(function (response) {
+            return response.json();
+          })
+          .then(function (data) {
+            stockAllData = data
+            // var res = JSON.parse(data.data);
+            for (let d of data.symbolData) {
+              stockSymbols.push({
+                label: d.symbol + " " + d.name,
+                value: d.symbol,
+              });
+            }
+          });
+      }
+      //onload get symbols, portfolio, and updated portfolio prices(batch)
+      getSymbols();
+      getPortfolio();
+      addRowsToHtml();
+
+
+      // jquery autocomplete w/ regex to help suggest only value
+      $("#symboltag").autocomplete({
+        source: function (request, response) {
+          var matcher = new RegExp(
+            $.ui.autocomplete.escapeRegex(request.term),
+            "i"
+          );
+          response(
+            $.grep(stockSymbols, function (value) {
+              return matcher.test(value.value);
+            })
+          );
+        },
+        minLength: 2,
+        change: function (event, ui) {
+          if (ui.item == null) {
+            event.currentTarget.value = "";
+            event.currentTarget.focus();
+          }
+        },
+        select: function (event, ui) {
+          var selectedSymbol = ui.item.label.split(" ")[0];
+           //console.log(stockAllData)
+          getSelected(selectedSymbol);
+          getSelectedHistorical(selectedSymbol)
+          // makeChartData(selectedSymbol)
+
+        },
+      })._renderItem = function (ul, item) {
+        return $("<li>")
+          .attr("data-value", item.value)
+          .append(item.label)
+          .appendTo(ul);
+      };
+
+      // once select symbol, get current price and historical for charting
+      function getSelected(symbol){
+             fetch(`/getselected/${symbol}`).then(function (response) {
+            return response.json();
+          })
+          .then(function (data) {
+            //console.log("GET response:");
+           // console.log(data);
+            currentStock = data
+
+          }).then(function (data){
+
+          })
+      }
+      //get updated latest prices for stocks in portfolio
+      function getBatch(){
+       allString = "";
+      for (i = 0; i < portfolio.length; i++) {
+        allString += portfolio[i].symbol + ",";
+      }
+      allString = allString.slice(0, -1);
+      if(allString != "")
+      {
+        fetch(`/getbatch/${allString}`).then(function (response) {
+              return response.json()
+             }).then(function(data){
+              ///console.log(data)
+              for( i in data){
+                for(j in portfolio){
+                  if(portfolio[j].symbol == data[i].quote.symbol){
+                 // console.log(portfolio[j].symbol)
+                  //console.log(data[i].quote.symbol)
+                 // console.log(portfolio[j].currentPrice + ",  " + data[i].quote.latestPrice)
+                  portfolio[j].currentPrice = data[i].quote.latestPrice}
+                }
+              }
+            postPortfolio()
+             }).then(
+              addRowsToHtml()
+             )}
+      }
+
+      //get selected historical
+      function getSelectedHistorical(symbol){
+             fetch(`/getselectedhistorical/${symbol}`).then(function (response) {
+              return response.json()
+             }).then(function (data){
+               currentStockHistoric = data
+             }).then(function(data){
+
+              setTimeout(function() {makeChartData(symbol)
+                }, 500);
+
+               })
+      }
+           //make chart data
+          function makeChartData(symbol){
+            //console.log(currentStock)
+             dataArrayChart = []
+             name = currentStock.companyName
+             currentPrice = currentStock.latestPrice
+           // const  currentStockHistoric =  stockAllData.storedData[symbol].historical
+            if (currentStockHistoric) {
+          for (i = 0; i < currentStockHistoric.length; i++) {
+            var oldDate = currentStockHistoric[i].date.toString();
+            var newDate = oldDate.replaceAll("-", " ");
+            var dateArray = newDate.split(" ");
+            var day = parseInt(dateArray[2]);
+            var month = parseInt(dateArray[1]);
+            var year = parseInt(dateArray[0]);
+            // month is now 0 indexed
+            var newObj = {
+              x: new Date(year, month - 1, day),
+              y: currentStockHistoric[i].close,
+            };
+            dataArrayChart.push(newObj);
+          }
+        }
+        showCanvas( currentStockHistoric, name, currentPrice);
+          }
+      //make chart 
+    function showCanvas(selectedStock, name, currentPrice){
+          document.getElementById("pricetag").value = currentPrice;
+
+      document.getElementsByClassName("canvasjs-chart-credit").innerHTML = "";
+      var chart = new CanvasJS.Chart("myChart", {
+        animationEnabled: true,
+        theme: "light2",
+        axisX: {
+          labelFormatter: function (e) {
+            return CanvasJS.formatDate(e.value, "DD MMM YYYY");
+          },
+        },
+        title: {
+          text:  name + " =" + currentPrice + " USD"
+        },
+        data: [
+          {
+            type: "line",
+            indexLabelFontSize: 16,
+            dataPoints: dataArrayChart,
+          },
+        ],
+      });
+      chart.render();
+    }
+        //resetfields button
+    function resetFields() {
+      document.getElementById("symboltag").value = "";
+      document.getElementById("pricetag").value = "";
+      document.getElementById("quantitytag").value = "";
+    }
+    //add rows to html 
+      
+       function addRowsToHtml() {
+      $("#stockTable tr").slice(0).remove();
+      $("#stockTable").append(
+        "<tr><td>Stock</td><td>avg price bought</td><td>todays updated price</td><td>Quantity</td><td>Total owned amount</td><td>Gain/Loss</td></tr>"
+      );
+        // calc gain loss, and rest of tables
+        for (var i = 0; i < portfolio.length; i++) {
+          var avgBoughtPrice = portfolio[i].totalPrices / portfolio[i].quantity;
+          var gainLoss =
+            ((portfolio[i].currentPrice - avgBoughtPrice) / avgBoughtPrice) * 100;
+
+          // add tables with data
+          $("#stockTable").append(
+            "<tr><td>" +
+              portfolio[i].symbol +
+              "</td><td> $" +
+              avgBoughtPrice.toFixed(2) +
+              "</td><td> $" +
+             portfolio[i].currentPrice.toFixed(2) +
+              "</td><td>" +
+              portfolio[i].quantity +
+              "</td><td>" +
+              portfolio[i].totalPrices.toFixed(2) +
+              "</td><td>" +
+              gainLoss.toFixed(2) +
+              "%" +
+              "</td></tr>"
+          );
+        }
+      
+    }
+
+    //update rows after modify
+    function updateRowsAfterModify(){
+    }
+ 
+    // add to portfolio array
+  function addToPortfolio() {
+       var symbol = document.getElementById("symboltag").value.split(" ")[0];
+      var quantity = document.getElementById("quantitytag").value;
+      var price = document.getElementById("pricetag").value;
+      var obj = null
+    if (Number.isInteger(quantity) == true || quantity !== "") {
+        obj = {
+          symbol: symbol,
+          price: parseFloat(price),
+          quantity: quantity,
+          totalPrices: quantity * price,
+          currentPrice: parseFloat(price)
+        };
+      } else alert("text boxes dont have the right type or is empty");
+        checkPortfolio(obj)
+    }
+
+    function checkPortfolio(obj){
+      var exist = false;
+      var quantity = document.getElementById("quantitytag").value;
+      var check = false
+      for(i in portfolio){
+        if(portfolio[i].symbol == obj.symbol){
+          check = true
+        }
+
+      }
+      for (i = 0; i < portfolio.length; i++) {
+        if (portfolio[i].symbol == obj.symbol)
+          if (
+            parseInt(portfolio[i].quantity) + parseInt(obj.quantity) >
+            0
+          ) {
+            //also handle deductions in quantity of stock
+            portfolio[i].totalPrices =
+              portfolio[i].totalPrices + obj.totalPrices;
+            portfolio[i].quantity =
+              parseInt(portfolio[i].quantity) + parseInt(obj.quantity);
+            exist = true;
+            break
+          } else if (
+            parseInt(portfolio[i].quantity) + parseInt(obj.quantity) ==
+            0
+          ) {
+            portfolio.splice(i, 1);
+
+            exist = false;
+            addRowsToHtml();
+            break
+          } else if (
+            parseInt(portfolio[i].quantity) + parseInt(obj.quantity) <
+            0
+          ) {
+            alert("Dont have enough stock to deduct");
+            exist = true;
+            break
+          }
+      }
+      
+      if (!exist && quantity + obj.quantity > 0) {
+        portfolio.push(obj);
+        exist = true
+        //return portfolio
+      } else if (!exist && quantity + obj.quantity < 0) {
+        alert("cant deduct a stock you dont own");
+      } else if (exist && quantity + obj.quantity < 0) {
+        alert("cant deduct a stock you dont own");
+      } else if (exist && quantity + obj.quantity == 0){
+        addRowsToHtml();
+
+      }
+      else null;
+      if(check == false && quantity < 0){
+        alert("cant deduct a stock you dont own");
+
+      }
+      addRowsToHtml();
+      postPortfolio()
+     // console.log("exists:")
+    //  console.log(exist)
+
+    }
+    //get /portfolio
+    function getPortfolio(){
+        fetch("/portfolio")
+          .then(function (response) {
+            return response.json();
+          })
+          .then(function (data) {
+           // console.log(data)
+            portfolio = data
+            getBatch()
+
+    })}
+
+    //post /portfolio
+    function postPortfolio(){
+        fetch('/portfolio', {
+        method: 'POST', // or 'PUT'
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(portfolio),
+      })
+      .then(response => response.json())
+      .then(obj => {
+       // console.log('Success:', obj);
+      })
+      .catch((error) => {
+      //  console.error('Error:', error);
+      });
+
+    }
+
+
+    </script>
+  </body>
+</html>
