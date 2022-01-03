@@ -159,10 +159,11 @@
               return response.json()
              }).then(function (data){
                currentStockHistoric = data
+               //console.log(data)
              }).then(function(data){
 
               setTimeout(function() {makeChartData(symbol)
-                }, 500);
+                }, 750);
 
                })
       }

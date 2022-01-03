@@ -102,9 +102,10 @@ def get_selected_historical(stock):
     if request.method == 'GET':
         url2 = "https://cloud.iexapis.com/stable/stock/" + \
             stock + \
-            "/chart/ytd?chartCloseOnly=true&token=" +\
+            "/chart/5y?chartCloseOnly=true&token=" + \
             api_key
         historical_data = requests.get(url2).json()
+        # print(historical_data)
         return jsonify(historical_data)
 
 # post portfolio
