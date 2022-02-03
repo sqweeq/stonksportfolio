@@ -100,7 +100,6 @@
           var selectedSymbol = ui.item.label.split(" ")[0];
            //console.log(stockAllData)
           getSelected(selectedSymbol);
-          getSelectedHistorical(selectedSymbol)
           // makeChartData(selectedSymbol)
 
         },
@@ -122,6 +121,7 @@
             currentStock = data
 
           }).then(function (data){
+          getSelectedHistorical(symbol)
 
           })
       }
